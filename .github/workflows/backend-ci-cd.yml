@@ -1,0 +1,102 @@
+name: Backend CI/CD
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      # Step 2: Set up Python environment
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.11'
+
+      # Step 3: Install dependencies
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # Step 4: Verify AWS credentials
+      - name: Verify AWS Credentials
+        run: aws sts get-caller-identity
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: 'us-east-1'
+
+      # Step 5: List files and directories for debugging
+      - name: List files and directories for debugging
+        run: |
+          echo "Listing files and directories..."
+          ls -R
+
+      # Step 6: Display environment variables for debugging
+      - name: Display environment variables for debugging
+        run: |
+          echo "Listing environment variables..."
+          printenv
+
+      # Step 7: Zip Lambda function
+      - name: Zip Lambda Function
+        run: |
+          cd MyProject
+          zip -r lambda_function.zip lambda_function.py
+          mv lambda_function.zip ../lambda_function.zip
+
+      # Step 8: Set up AWS CLI with credentials
+      - name: Set up AWS CLI
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      # Step 9: Initialize Terraform
+      - name: Initialize Terraform
+        run: terraform init
+        working-directory: terraform
+
+      # Step 10: Verify existing resources with Terraform plan
+      - name: Verify Existing Resources with Terraform Plan
+        run: terraform plan -out=terraform_plan
+        working-directory: terraform
+
+      # Step 11: Apply Terraform changes (if needed)
+      - name: Apply Terraform Changes
+        run: terraform apply terraform_plan
+        working-directory: terraform
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: 'us-east-1'
+
+      # Step 12: Deploy Lambda function (optional, if required)
+      - name: Deploy Lambda Function
+        run: |
+          aws lambda update-function-code --function-name YourLambdaFunctionName --zip-file fileb://lambda_function.zip
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: 'us-east-1'
+
+      # Step 13: Run tests
+      - name: Run Python Tests
+        run: |
+          pytest test/test_lambda_function.py
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: 'us-east-1'
